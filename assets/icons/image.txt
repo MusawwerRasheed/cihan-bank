@@ -1,0 +1,1506 @@
+// ignore_for_file: prefer_typing_uninitialized_variables
+
+import 'dart:developer';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:tennis_app/Application/Coach/Gallery/gallery_data_cubit.dart';
+import 'package:tennis_app/Application/Player/Home/calender_data_cubit.dart';
+import 'package:tennis_app/Application/Player/Training/player_training_cubit.dart';
+import 'package:tennis_app/Application/Player/Training/player_training_state.dart';
+import 'package:tennis_app/Application/Player/Training/training_game_situation_cubit.dart';
+import 'package:tennis_app/Application/Player/Training/training_raw_output_cubit.dart';
+import 'package:tennis_app/Application/Player/Training/update_game_situation_training_cubit.dart';
+import 'package:tennis_app/Data/Repository/Notification/notification_repo.dart';
+import 'package:tennis_app/Domain/Models/AuthModels/user_data_model.dart';
+import 'package:tennis_app/Presentation/common/ContextWidgets/success_snackbar.dart';
+import 'package:tennis_app/Presentation/common/custom_date_picker_with_validation.dart';
+import 'package:tennis_app/Presentation/common/custom_time_picker_with_validation.dart';
+import 'package:tennis_app/imports.dart';
+
+var selectedGameSituations = [];
+double totalDuration = 0.0;
+
+class PlayerAddTraining extends StatefulWidget {
+  const PlayerAddTraining({super.key});
+
+  @override
+  State<PlayerAddTraining> createState() => _PlayerAddTrainingState();
+}
+
+class _PlayerAddTrainingState extends State<PlayerAddTraining> {
+  final formKey = GlobalKey<FormState>();
+  final trainingName = TextEditingController();
+  final coachName = TextEditingController();
+  final primaryObjective = TextEditingController();
+  final warmUpDurationController = TextEditingController();
+  final exerciseController = TextEditingController();
+  final notesController = TextEditingController();
+  final clubName = TextEditingController();
+  final shotDurationController = TextEditingController();
+  final durationController = TextEditingController();
+
+  final shotTitleController = TextEditingController();
+  final date = TextEditingController();
+  final startTime = TextEditingController();
+
+  //DateTime? startTime;
+  DateTime? finishTime;
+  int? selectedDuration;
+  var levelOfPlayer;
+  var gameMode;
+  var typeOfBall;
+  var duration;
+
+  var selectedShot;
+
+  var selectedRadioButton = "Drill";
+  var selectedDrillType = "GameSituation";
+
+  final List<List<Map<String, dynamic>>> shots = List.empty(growable: true);
+
+  List<String?> image = [];
+  Map<String, dynamic> selectedGame = {};
+
+  List<String> game = [];
+  List<Map<String, dynamic>> techniqueData = [];
+
+  bool imageRequired = false;
+
+  bool isClicked = false;
+
+  var endTime = TextEditingController();
+
+  @override
+  void initState() {
+    UserData? data = SharedPrefs.getUserLoginData();
+    coachName.text = data?.user.coachModel != null
+        ? "${data!.user.coachModel!.firstName}${data.user.coachModel!.lastName}"
+        : "No Connected Coach";
+
+    super.initState();
+    log("Here is the name: ${coachName.text}");
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedDrillType == 'Techniques') {
+      context.read<TrainingGameSituationCubit>().gameSituationData([]);
+    }
+    if (selectedRadioButton == AppLocalizations.of(context)!.rally) {
+      selectedDrillType = AppLocalizations.of(context)!.gameSituation;
+    }
+    // print(selectedRadioButton);
+    context.read<UpdateGameSituationTrainingCubit>().update(false);
+    return Scaffold(
+      backgroundColor: AppColors.backgroundColor,
+      appBar: CustomAppBar(
+          title: AppLocalizations.of(context)!.newTraingingSession),
+      body: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Form(
+            key: formKey,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10).r,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CustomSizedBox.height(25),
+                  image.isEmpty
+                      ? AddImageWidget(
+                          onTap: () async {
+                            var selectedImage = await PickFile.pickImage();
+                            setState(() {
+                              image = selectedImage;
+                            });
+                            log("Image $image");
+                          },
+                        )
+                      : SizedBox(
+                          height: 150.sp,
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            scrollDirection: Axis.horizontal,
+                            itemCount: image.length,
+                            itemBuilder: (context, index) {
+                              return DisplayFileImage(
+                                fileImage: image[index].toString(),
+                                onDeleteTap: () {
+                                  setState(() {
+                                    image.removeAt(index);
+                                    //image = [];
+                                  });
+                                },
+                              );
+                            },
+                            separatorBuilder:
+                                (BuildContext context, int index) {
+                              return SizedBox(
+                                width: 5.sp,
+                              );
+                            },
+                          ),
+                        ),
+                  image.isEmpty == true
+                      ? AppText(AppLocalizations.of(context)!.pleaseSelectImage,
+                          style: Styles.latoRegular(context,
+                              color: AppColors.redColor, fontSize: 12.sp))
+                      : const SizedBox(
+                          height: 0,
+                          width: 0,
+                        ),
+
+                  CustomSizedBox.height(20),
+                  CustomTextField(
+                    titleText: AppLocalizations.of(context)!.trainingName,
+                    controller: trainingName,
+                    hintText: AppLocalizations.of(context)!.trainingName,
+                    textInputType: TextInputType.text,
+                    isBorderRequired: false,
+                    isValid: false,
+                    validator: Validate.trainingName,
+                    //validateText: 'Training Name',
+                  ),
+                  titleText(AppLocalizations.of(context)!.date),
+                  CustomDatePickerValidateWidget(
+                    initDate: DateTime.now().add(Duration(days: 1)),
+                    firstDate: DateTime.now().add(Duration(days: 1)),
+                    isBorderRequired: false,
+                    isSuffix: true,
+                    hintText: AppLocalizations.of(context)!.selectDate,
+                    contentPadding: EdgeInsets.symmetric(
+                        vertical: 15.sp, horizontal: 15.sp),
+                    suffixIcon: const AssetImageWidget(
+                      url: Assets.pickDate,
+                    ),
+                    validator: Validate.trainingDate,
+                    controller: date,
+                  ),
+                  titleText(AppLocalizations.of(context)!.startTime),
+                  CustomTimePickerWithValidation(
+                    isBorderRequired: false,
+                    isSuffix: true,
+                    hintText: AppLocalizations.of(context)!.selectTime,
+                    contentPadding: EdgeInsets.symmetric(
+                        vertical: 15.sp, horizontal: 15.sp),
+                    suffixIcon: const AssetImageWidget(
+                      url: Assets.time,
+                    ),
+                    validator: Validate.trainingTime,
+                    controller: startTime,
+                  ),
+                  titleText(AppLocalizations.of(context)!.endTime),
+                  CustomTimePickerWithValidation(
+                    isBorderRequired: false,
+                    isSuffix: true,
+                    hintText: AppLocalizations.of(context)!.selectTime,
+                    contentPadding: EdgeInsets.symmetric(
+                        vertical: 15.sp, horizontal: 15.sp),
+                    suffixIcon: const AssetImageWidget(
+                      url: Assets.time,
+                    ),
+                    validator: Validate.trainingTime,
+                    controller: endTime,
+                  ),
+                  // CustomTimePicker(
+                  //   isBorderRequired: false,
+                  //   isSuffix: true,
+                  //   text: AppLocalizations.of(context)!.startTime,
+                  //   imageUrl: Assets.time,
+                  //   selectedTime: startTime,
+                  //   time: (DateTime? time) {
+                  //     setState(() {
+                  //       startTime = time;
+                  //     });
+                  //   },
+                  // ),
+                  CustomTextField(
+                    readOnly: true,
+                    titleText: AppLocalizations.of(context)!.coachName,
+                    controller: coachName,
+                    hintText: coachName.text,
+                    textInputType: TextInputType.text,
+                    isBorderRequired: false,
+                    isValid: false,
+                    validator: Validate.trainingCoachName,
+                    // validateText: 'Training Name',
+                  ),
+                  CustomTextField(
+                    titleText:
+                        AppLocalizations.of(context)!.primaryObjectiveWithColun,
+                    controller: primaryObjective,
+                    hintText: AppLocalizations.of(context)!.writeComments,
+                    textInputType: TextInputType.text,
+                    isBorderRequired: false,
+                    isValid: false,
+                    validator: Validate.trainingObjective,
+                    //validateText: 'Primary Objective',
+                  ),
+                  CustomTextField(
+                    titleText: AppLocalizations.of(context)!.club,
+                    controller: clubName,
+                    hintText: AppLocalizations.of(context)!.clubName,
+                    textInputType: TextInputType.text,
+                    isBorderRequired: false,
+                    isValid: false,
+                    validator: Validate.trainingClub,
+                  ),
+
+                  CustomTextField(
+                    titleText: AppLocalizations.of(context)!.duration,
+                    controller: durationController,
+                    hintText: AppLocalizations.of(context)!.egTenMinutes,
+                    textInputType: TextInputType.number,
+                    isBorderRequired: false,
+                    isValid: false,
+                    onChanged: (val) {
+                      if (val.toString().isNotEmpty) {
+                        setState(() {
+                          totalDuration = double.parse(val);
+                        });
+                      }
+                    },
+                    validator: Validate.trainingDuration,
+                    //  validateText: 'Duration',
+                  ),
+                  titleText(
+                    AppLocalizations.of(context)!.whatTypesOfShotsYou,
+                  ),
+                  Row(
+                    children: [
+                      CustomRadioButtons(
+                        initialValue: AppLocalizations.of(context)!.drill,
+                        // groupValue: "Drill",
+                        getCurrentValue: (s) {
+                          selectedRadioButton = s;
+                          //print(selectedRadioButton);
+                          setState(() {});
+                        },
+                        buttonList: [
+                          AppLocalizations.of(context)!.drill,
+                          AppLocalizations.of(context)!.rally
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Condition for Drills Selection if drills is selected..
+                  selectedRadioButton == AppLocalizations.of(context)!.drill
+                      ? titleText(AppLocalizations.of(context)!.selectAnyType)
+                      : const SizedBox(),
+                  selectedRadioButton == AppLocalizations.of(context)!.drill
+                      ? Container(
+                          margin: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 10)
+                              .r,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 13,
+                          ).r,
+                          decoration: BoxDecoration(
+                            color: AppColors.whiteColor,
+                            borderRadius: BorderRadius.circular(10).r,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 20,
+                              right: 13,
+                            ).r,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: CustomRadioButtons(
+                                    initialValue: AppLocalizations.of(context)!
+                                        .gameSituation,
+                                    getCurrentValue: (s) {
+                                      selectedDrillType = s;
+                                      setState(() {});
+                                    },
+                                    buttonList: [
+                                      AppLocalizations.of(context)!
+                                          .gameSituation,
+                                      AppLocalizations.of(context)!.tecniques
+                                    ],
+                                    buttonPadding: const EdgeInsets.only(
+                                        right: 10, left: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const SizedBox(),
+
+                  // Condition when technique is selected.
+                  selectedDrillType == AppLocalizations.of(context)!.tecniques
+                      ? const SizedBox()
+                      : titleText(AppLocalizations.of(context)!.gameSituation),
+                  selectedDrillType == AppLocalizations.of(context)!.tecniques
+                      ? const SizedBox()
+                      : BlocConsumer<UpdateGameSituationTrainingCubit, bool>(
+                          listener: (context, state1) {
+                            if (state1 == true) {
+                              setState(() {});
+                            }
+                          },
+                          builder: (context, state1) {
+                            return BlocConsumer<TrainingGameSituationCubit,
+                                List>(
+                              listener: (context, state) {
+                                // TODO: implement listener
+                              },
+                              builder: (context, state) {
+                                return MultiItemPickerWithBloc(
+                                  list: (l) {
+                                    selectedGameSituations = l;
+
+                                    setState(() {});
+                                  },
+                                  hMar: 0,
+                                  getList: Utils()
+                                      .gameSituations
+                                      .map((e) => e[
+                                          AppLocalizations.of(context)!.title])
+                                      .toList(),
+                                  hintText: AppLocalizations.of(context)!
+                                      .selectGameSituation,
+                                  list2: state,
+                                  //isClicked:isClicked
+                                );
+                              },
+                            );
+                          },
+                        ),
+
+                  CustomSizedBox.height(10),
+
+                  ///to be evaluated
+                  // buildSizedBox1(context),
+
+                  ListWidget(
+                    selectedGameSituations: selectedGameSituations,
+                    selectedGame: selectedGame,
+                    durationController: durationController,
+                    totalDuration: totalDuration,
+                  ),
+                  selectedDrillType ==
+                              AppLocalizations.of(context)!.tecniques &&
+                          selectedRadioButton ==
+                              AppLocalizations.of(context)!.drill
+                      ? CustomButton(
+                          onTap: () {
+                            game = Utils.allShots;
+                            final List<Map<String, dynamic>> shots =
+                                List.empty(growable: true);
+                            final Map<int, List<Map<String, dynamic>>>
+                                shotsTest = {};
+                            var valueDropDown;
+                            showPopUp(context, valueDropDown);
+                          },
+                          verticalPadding: 12.sp,
+                          horizontalMargin: 20.sp,
+                          verticalMargin: 10.sp,
+                          text: "+ Add Shots",
+                          bgColor: AppColors.whiteColor,
+                          borderColor: AppColors.primaryColor,
+                          textColor: AppColors.blackColor,
+                        )
+                      : SizedBox(
+                          height: 0.sp,
+                        ),
+                  selectedDrillType ==
+                              AppLocalizations.of(context)!.tecniques &&
+                          selectedRadioButton ==
+                              AppLocalizations.of(context)!.drill
+                      ? SizedBox(
+                          height: techniqueData.isEmpty ? 0.h : 40.h,
+                          width: 1.sw,
+                          child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              shrinkWrap: true,
+                              itemBuilder: (context, index) {
+                                // Map<String,dynamic> dto={
+                                //   'Shot_Title':shotTitleController.text,
+                                //   'duration':shotDurationController.text,
+                                //   'shot_sub_title':shotsController.text??""
+                                // };
+                                return Container(
+                                  width: 180.w,
+                                  // height: 50.h,
+                                  margin: const EdgeInsets.only(right: 10).r,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryColor,
+                                    borderRadius: BorderRadius.circular(8).r,
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      Center(
+                                        child: FittedBox(
+                                          child: AppText(
+                                            //list[index],
+                                            '${techniqueData[index]['shot_title']}->${techniqueData[index]['shot_sub_title']} ${techniqueData[index]['duration']}min ',
+                                            style: Styles.latoSemiBold(
+                                              context,
+                                              color: AppColors.whiteColor,
+                                              fontSize: 12.sp,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.topRight,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            //  print("object");
+                                            setState(
+                                              () {
+                                                techniqueData.removeAt(index);
+                                              },
+                                            );
+                                            //widget.list(list);
+                                          },
+                                          behavior: HitTestBehavior.opaque,
+                                          child: Container(
+                                            width: 15.w,
+                                            height: 15.w,
+                                            decoration: const BoxDecoration(
+                                              color: AppColors.blackColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Center(
+                                              child: Icon(
+                                                Icons.close_rounded,
+                                                color: AppColors.whiteColor,
+                                                size: 10.r,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              separatorBuilder: (context, index) {
+                                return SizedBox(
+                                  width: 5.sp,
+                                );
+                              },
+                              itemCount: techniqueData.length),
+                        )
+                      : SizedBox(
+                          height: 0.sp,
+                        ),
+                  CustomSizedBox.height(10),
+                  BlocListener<TrainingCubit, PlayerTrainingState>(
+                    listener: (context, state) async {
+                      if (state is PlayerTrainingLoadingState) {
+                        CustomDialog.loadingDialog(context);
+                      } else if (state is PlayerTrainingAddedFailed) {
+                        Navigator.of(context).pop(true);
+                        CustomDialog.errorDialog(context,
+                            title: state.errorMessage,
+                            message: AppLocalizations.of(context)!
+                                .pleaseTryAgainLater);
+                        App.instance.toast(
+                            context,
+                            successSnackBar(
+                                text: state.errorMessage,
+                                context: context,
+                                bgColor: AppColors.primaryColor));
+                      } else if (state is PlayerTrainingAdded) {
+                        Navigator.of(context).pop(false);
+                        context.read<TrainingCubit>().getTrainingData(true);
+                        context.read<CalenderDataCubit>().getCalenderData();
+                        String fcm = await NotificationServices.getFcm();
+                        var data = {
+                          "userId": SharedPrefs.userData?.user.id,
+                          "title": AppLocalizations.of(context)!
+                              .newTrainingHasBeenCreated,
+                          "body": AppLocalizations.of(context)!
+                              .youHaveSuccessfullyCreatedNewTrainingSession,
+                          "token": fcm,
+                          "info": AppLocalizations.of(context)!.training
+                        };
+                        NotificationRepo().fireNotification(data);
+
+                        // context.read<GalleryDataCubit>().getGalleryData(true,"all");
+                        Navigator.of(context).pop(true);
+                        CustomDialog.successDialog(context,
+                            title: AppLocalizations.of(context)!
+                                .trainingAddedSuccessfully,
+                            message:
+                                "${AppLocalizations.of(context)!.youHaveSuccessfullyCreatedNewTrainingSession} ${trainingName.text} ");
+                        clearController();
+
+                        setState(() {});
+                        // App.instance.toast(
+                        //     context,
+                        //     successSnackBar(
+                        //         text: "Added Success",
+                        //         context: context,
+                        //         bgColor: AppColors.primaryColor));
+                      }
+                    },
+                    child: BlocConsumer<TrainingRawOutputCubit,
+                        Map<int, List<Map<String, dynamic>>>>(
+                      listener: (context, state) {
+                        // TODO: implement listener
+                      },
+                      builder: (context, state) {
+                        return CustomButton(
+                          onTap: () async {
+                            var filesPath = image;
+                            var listToSend = [];
+                            // print("sss");
+                            // print(filesPath);
+                            //   var map={};
+
+                            if (formKey.currentState!.validate() &&
+                                image.isNotEmpty) {
+                              // print(state);
+                              if (selectedDrillType != "Techniques") {
+                                state.forEach((key, value) {
+                                  // Add the value to the list
+                                  //  list.add(value);
+
+                                  for (var element in value) {
+                                    //  listToSend.add({"game_situation":element['game_situation']});
+                                    var map = {};
+
+                                    if (element.isNotEmpty) {
+                                      map["game_situation"] =
+                                          element['game_situation'];
+                                      List innerList = element["shots"];
+
+                                      if (element["shots"] != null) {
+                                        for (var dto in innerList) {
+                                          //listToSend.insert(i,dto['shot_title']);
+
+                                          map["shot_title"] = dto['shot_title'];
+                                          map["shot_sub_title"] = dto["shot"];
+                                          map["duration"] =
+                                              "${dto["duration"]}";
+
+                                          map["game_situation"] =
+                                              dto["game_situation"];
+                                        }
+                                        listToSend.add(map);
+                                      }
+                                    }
+                                  }
+                                });
+                              }
+
+                              log("listData $listToSend");
+                              //print(selectedGameSituations);
+                              context.read<TrainingCubit>().addTraining(
+                                    trainingName: trainingName.text,
+                                    date: date.text,
+                                    //   date:"2023-06-06",
+                                    startTime: startTime.text.trim(),
+                                    endTime: endTime.text.trim(),
+                                    // startTime:"12:20 PM",
+                                    coachName: coachName.text,
+                                    primaryObjective: primaryObjective.text,
+                                    club: clubName.text,
+                                    duration: durationController.text,
+                                    gameSituation:
+                                        selectedDrillType == "Techniques"
+                                            ? []
+                                            : selectedGameSituations,
+                                    shots: selectedDrillType == "Techniques"
+                                        ? techniqueData
+                                        : listToSend,
+                                    files: filesPath,
+                                    shotType: selectedRadioButton,
+                                  );
+                            } else {
+                              if (image.isNotEmpty) {
+                                setState(() {
+                                  imageRequired = false;
+                                });
+                              } else {
+                                setState(() {
+                                  imageRequired = true;
+                                });
+                              }
+                            }
+                          },
+                          text: AppLocalizations.of(context)!.add,
+                        );
+                      },
+                    ),
+                  ),
+                  CustomSizedBox.height(10),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  showPopUp(BuildContext context, valueDropDown
+
+      //void Function(Map<String, dynamic> val) onchange
+      ) async {
+// print("from this");
+//     print( widget.selectedGame);
+    var shotTitleController = TextEditingController();
+//var shotsController=TextEditingController();
+    var shotDurationController = TextEditingController();
+    var shotsController = TextEditingController();
+    // shotTitleController.text=widget.selectedGame["shots"][0];
+
+    await showDialog(
+        context: context,
+        builder: (context) => Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20.sp)),
+              child: StatefulBuilder(
+                  builder: (BuildContext context2, StateSetter setStateDiolog) {
+                // if( Utils.shotsListToTitle.containsKey(shotTitleController.text)==false)
+                // {
+                //   shotsController.clear();
+                // }
+                print('rebuilded diolog');
+                log("${shotTitleController.text}thissss");
+
+                return SingleChildScrollView(
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 420.sp,
+                    // decoration: BoxDecoration(borderRadius: BorderRadius.circular(20.sp)),
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                          left: 10, right: 10, top: 20, bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              TitleText(
+                                text: AppLocalizations.of(context)!.shots,
+                              ),
+                              // TitleText(
+                              //   text:game['title'],
+                              // ),
+                            ],
+                          ),
+                          CustomSizedBox.height(5),
+                          TextFormField(
+                            readOnly: true,
+                            controller: shotTitleController,
+                            validator: (value) {
+                              if (value == null) {
+                                return AppLocalizations.of(context)!.selectShot;
+                              }
+                              return null;
+                            },
+                            decoration: InputDecoration(
+                              hintText:
+                                  AppLocalizations.of(context)!.selectShot,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20.r)),
+                              suffixIcon: Padding(
+                                padding:
+                                    const EdgeInsetsDirectional.only(end: 12.0),
+                                child: DropdownButton<String>(
+                                  underline: const SizedBox(),
+                                  style: const TextStyle(color: Colors.black),
+                                  value: null,
+                                  // Replace null with the selected shot
+                                  onChanged: (String? newValue) {
+                                    // selectedGame!['shots'].remove(newValue);
+                                    shotTitleController.text = newValue!;
+                                    setStateDiolog(() {});
+
+                                    if (kDebugMode) {
+                                      print(newValue);
+                                    }
+                                  },
+                                  items: game.map<DropdownMenuItem<String>>(
+                                      (String shot) {
+                                    return DropdownMenuItem<String>(
+                                      value: shot,
+                                      child: Text(shot),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          CustomSizedBox.height(5),
+                          Utils.shotsListToTitle
+                                  .containsKey(shotTitleController.text)
+                              ? TitleText(
+                                  text: AppLocalizations.of(context)!.shots)
+                              : SizedBox(
+                                  height: 0.sp,
+                                ),
+                          Utils.shotsListToTitle
+                                  .containsKey(shotTitleController.text)
+                              ? TextFormField(
+                                  readOnly: true,
+                                  controller: shotsController,
+                                  validator: (value) {
+                                    if (value == null) {
+                                      return AppLocalizations.of(context)!
+                                          .selectShot;
+                                    }
+                                    return null;
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: AppLocalizations.of(context)!
+                                        .selectShot,
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(20.r)),
+                                    suffixIcon: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0),
+                                      child: DropdownButton<String>(
+                                        underline: const SizedBox(),
+                                        style: const TextStyle(
+                                            color: Colors.black),
+                                        value: null,
+                                        // Replace null with the selected shot
+                                        onChanged: (String? newValue) {
+                                          // selectedGame!['shots'].remove(newValue);
+                                          shotsController.text = newValue!;
+
+                                          if (kDebugMode) {
+                                            print(newValue);
+                                          }
+                                        },
+                                        items: Utils.shotsListToTitle[
+                                                shotTitleController.text == ''
+                                                    ? 'test'
+                                                    : shotTitleController.text]
+                                            .map<DropdownMenuItem<String>>(
+                                                (String shot) {
+                                          return DropdownMenuItem<String>(
+                                            value: shot,
+                                            child: Text(shot),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : SizedBox(
+                                  height: 0.sp,
+                                ),
+                          CustomSizedBox.height(10),
+
+                          // Utils.shotsListToTitle.containsKey(shotTitleController.text)?  const TitleText(text: 'Shots'):SizedBox(height: 0.sp,),
+                          // Utils.shotsListToTitle.containsKey(shotTitleController.text)?
+                          // TextFormField(
+                          //   controller: shotsController,
+                          //   validator: (value) {
+                          //     if (value == null) {
+                          //       return 'Select shots';
+                          //     }
+                          //     return null;
+                          //   },
+                          //   decoration: InputDecoration(
+                          //     hintText: 'Select shot',
+                          //     border: OutlineInputBorder(
+                          //         borderRadius: BorderRadius.circular(20.r)),
+                          //     suffixIcon: Padding(
+                          //       padding:
+                          //       const EdgeInsets.symmetric(horizontal: 8.0),
+                          //       child: DropdownButton<String>(
+                          //         underline: const SizedBox(),
+                          //         style: const TextStyle(color: Colors.black),
+                          //         value: null,
+                          //         // Replace null with the selected shot
+                          //         onChanged: (String? newValue) {
+                          //           // selectedGame!['shots'].remove(newValue);
+                          //           shotsController.text = newValue!;
+                          //
+                          //           if (kDebugMode) {
+                          //             print(newValue);
+                          //           }
+                          //         },
+                          //         items: Utils.shotsListToTitle[shotTitleController.text==''?'test':shotTitleController.text]
+                          //             .map<DropdownMenuItem<String>>((String shot) {
+                          //           return DropdownMenuItem<String>(
+                          //             value: shot,
+                          //             child: Text(shot),
+                          //           );
+                          //         }).toList(),
+                          //       ),
+                          //     ),
+                          //   ),
+                          // ): SizedBox(height: 0.sp,),
+
+                          TitleText(
+                              text: AppLocalizations.of(context)!.shotDuration),
+                          CustomSizedBox.height(10),
+                          CustomTextField(
+                            controller: shotDurationController,
+                            hintText: AppLocalizations.of(context)!.durationMin,
+                            textInputType: TextInputType.number,
+                            validateText:
+                                AppLocalizations.of(context)!.selectDuration,
+                          ),
+                          CustomSizedBox.height(20),
+                          CustomButton(
+                              onTap: () {
+                                // print(selectedGame!['title']);
+                                if (shotTitleController.text.isEmpty ||
+                                    shotDurationController.text.isEmpty) {
+                                  CustomDialog.errorDialog(context,
+                                      title: AppLocalizations.of(context)!
+                                          .titleDurationError,
+                                      message: AppLocalizations.of(context)!
+                                          .fieldCanNotBeEmpty);
+                                } else if (double.parse(
+                                        shotDurationController.text) >
+                                    double.parse(durationController.text)) {
+                                  CustomDialog.errorDialog(context,
+                                      title: AppLocalizations.of(context)!
+                                          .durationError,
+                                      message: AppLocalizations.of(context)!
+                                          .durationCanNotBeGreaterThanOverAll);
+                                } else {
+                                  Map<String, dynamic> dto = {
+                                    'shot_title': shotTitleController.text,
+                                    'duration': shotDurationController.text,
+                                    'shot_sub_title':
+                                        shotsController.text ?? "",
+                                    'game_situation': null
+                                  };
+                                  techniqueData.add(dto);
+
+                                  print("total Duration ----> $totalDuration");
+                                  setState(() {});
+                                  Navigator.of(context).pop(true);
+                                  shotDurationController.clear();
+                                  shotTitleController.clear();
+                                }
+                              },
+                              text: AppLocalizations.of(context)!.add),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ));
+  }
+
+  Widget titleText(text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 3, top: 6).r,
+      child: AppText(
+        text,
+        style: Styles.latoSemiBold(
+          context,
+          fontSize: 16.sp,
+        ),
+      ),
+    );
+  }
+
+  void clearController() {
+    trainingName.clear();
+    date.clear();
+    startTime.clear();
+    clubName.clear();
+    coachName.clear();
+    primaryObjective.clear();
+    durationController.clear();
+    selectedRadioButton = AppLocalizations.of(context)!.drill;
+    image.clear();
+    imageRequired = false;
+    totalDuration = 0.0;
+    selectedGameSituations.clear();
+    isClicked = false;
+    // setState(() {
+    //
+    // });
+  }
+}
+
+class ListWidget extends StatefulWidget {
+  Map<String, dynamic> selectedGame;
+  final List selectedGameSituations;
+  final double totalDuration;
+  final TextEditingController durationController;
+
+  ListWidget(
+      {super.key,
+      required this.selectedGameSituations,
+      required this.selectedGame,
+      required this.durationController,
+      required this.totalDuration});
+
+  @override
+  State<ListWidget> createState() => _ListWidgetState();
+}
+
+class _ListWidgetState extends State<ListWidget> {
+  var shotTitleController = TextEditingController();
+  var shotsController = TextEditingController();
+  var shotDurationController = TextEditingController();
+
+  final List<Map<String, dynamic>> shots = List.empty(growable: true);
+  final Map<int, List<Map<String, dynamic>>> shotsTest = {};
+
+  @override
+  Widget build(BuildContext context) {
+    // print("lengthh");
+    // print(shots.length);
+    // print(   shotsTest[2]);
+    // // Utils.shotsListToTitle[''];
+
+    return BlocConsumer<TrainingGameSituationCubit, List>(
+      listener: (context, state) {
+        // TODO: implement listener
+      },
+      builder: (context, state) {
+        // print(state[4].toString()+"test");
+        return ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: state.length,
+            itemBuilder: (context, index) {
+              Map<String, dynamic> game = state[index] ==
+                      AppLocalizations.of(context)!.rally
+                  ? Utils().gameSituations[0]
+                  : state[index] == AppLocalizations.of(context)!.attack
+                      ? Utils().gameSituations[1]
+                      : state[index] == AppLocalizations.of(context)!.defence
+                          ? Utils().gameSituations[2]
+                          : state[index] == AppLocalizations.of(context)!.serve
+                              ? Utils().gameSituations[3]
+                              : state[index] ==
+                                      AppLocalizations.of(context)!.returns
+                                  ? Utils().gameSituations[4]
+                                  : {};
+
+              print("gameeeeeeeee");
+              print(game);
+              print(state[index]);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CustomSizedBox.height(10.h),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 85.w,
+                        height: 40.h,
+                        margin: const EdgeInsets.only(right: 10).r,
+                        decoration: BoxDecoration(
+                          color: AppColors.lightGreyColor,
+                          borderRadius: BorderRadius.circular(8).r,
+                        ),
+                        child: Stack(
+                          children: [
+                            Center(
+                              child: AppText(
+                                //list[index],
+                                '${state[index]}',
+                                style: Styles.latoSemiBold(
+                                  context,
+                                  color: AppColors.blackColor,
+                                  fontSize: 12.sp,
+                                ),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    state.removeAt(index);
+                                    if (shotsTest[index] != null) {
+                                      shotsTest[index] = [];
+                                    }
+                                  });
+
+                                  context
+                                      .read<TrainingGameSituationCubit>()
+                                      .gameSituationData(state);
+                                  context
+                                      .read<UpdateGameSituationTrainingCubit>()
+                                      .update(true);
+                                  context
+                                      .read<TrainingRawOutputCubit>()
+                                      .updateRaw(shotsTest);
+                                  //widget.list(list);
+                                },
+                                behavior: HitTestBehavior.opaque,
+                                child: Container(
+                                  width: 17.w,
+                                  height: 17.h,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.blackColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      color: AppColors.whiteColor,
+                                      size: 10.r,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.only(right: 10.w),
+                            child: Text(AppLocalizations.of(context)!.addShots),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              // widget.selectedGame?.clear();
+                              // print("testing");
+                              //   print(game);
+                              setState(() {
+                                widget.selectedGame = game;
+                              });
+
+                              showPopUp(
+                                context,
+                                shots,
+                                index,
+                                shotsTest,
+                                widget.selectedGame,
+                                widget.durationController,
+                              );
+                              // , (val) {
+                              //   setState(() {
+                              //     // print(val);
+                              //     shots.add(val);
+                              //   });
+                              // });
+                            },
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(15),
+                                color: AppColors.lightGreyColor,
+                              ),
+                              child: const Icon(Icons.add),
+                            ),
+                          )
+                        ],
+                      ),
+                    ],
+                  ),
+                  CustomSizedBox.height(15.h),
+                  //Text("${shots}"),
+                  //   buildSizedBox(context,shots,index)
+                  /// to be set
+                  shotsTest[index] == null
+                      ? const SizedBox(
+                          height: 0,
+                          width: 0,
+                        )
+                      : IndividualListTrainingWidget(
+                          shotsIndividual: shots,
+                          index2: index,
+                          shotTest: shotsTest)
+                ],
+              );
+            });
+      },
+    );
+  }
+
+  void showPopUp(
+      BuildContext context,
+      List<Map<String, dynamic>> shots1,
+      int index,
+      Map<int, List<Map<String, dynamic>>> shotsTest,
+      Map<String, dynamic> game,
+      TextEditingController durationController) async {
+    var shotTitleController = TextEditingController();
+    var shotsController = TextEditingController();
+    var shotDurationController = TextEditingController();
+    log("${shotTitleController.text}thissss");
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.sp)),
+        child: StatefulBuilder(
+          builder: (context, StateSetter setStateDialog) {
+            print(game[AppLocalizations.of(context)!.shots]);
+            if (game[AppLocalizations.of(context)!.shots] == null) {
+              game[AppLocalizations.of(context)!.shots] = [];
+            }
+            if (!Utils.shotsListToTitle.containsKey(shotTitleController.text)) {
+              shotsController.clear();
+            }
+
+            return SingleChildScrollView(
+              child: SizedBox(
+                width: double.infinity,
+                height: 420.sp,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                      //shrinkWrap: true,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CustomSizedBox.height(20),
+                        Row(
+                          children: [
+                            TitleText(
+                              text: AppLocalizations.of(context)!.shots,
+                            ),
+                            TitleText(
+                              text: game[AppLocalizations.of(context)!.title],
+                            ),
+                          ],
+                        ),
+                        CustomSizedBox.height(5),
+                        TextFormField(
+                          readOnly: true,
+                          controller: shotTitleController,
+                          validator: (value) {
+                            if (value == null) {
+                              return AppLocalizations.of(context)!.title;
+                            }
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            hintText: AppLocalizations.of(context)!.selectShot,
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20.r)),
+                            suffixIcon: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8.0),
+                              child: DropdownButton<String>(
+                                underline: const SizedBox(),
+                                style: const TextStyle(color: Colors.black),
+                                value: AppLocalizations.of(context)!.selectShot,
+                                // Replace null with the selected shot
+                                onChanged: (String? newValue) {
+                                  // selectedGame!['shots'].remove(newValue);
+                                  shotTitleController.text = newValue!;
+                                  setStateDialog(() {});
+
+                                  if (kDebugMode) {
+                                    print(newValue);
+                                  }
+                                },
+                                items: game[AppLocalizations.of(context)!.shots]
+                                        ?.map<DropdownMenuItem<String>>(
+                                            (String shot) {
+                                      return DropdownMenuItem<String>(
+                                        value: shot,
+                                        child: Text(shot),
+                                      );
+                                    }).toList() ??
+                                    [],
+                              ),
+                            ),
+                          ),
+                        ),
+                        CustomSizedBox.height(10),
+                        Utils.shotsListToTitle
+                                .containsKey(shotTitleController.text)
+                            ? TitleText(
+                                text: AppLocalizations.of(context)!.shots)
+                            : SizedBox(
+                                height: 0.sp,
+                              ),
+                        Utils.shotsListToTitle
+                                .containsKey(shotTitleController.text)
+                            ? TextFormField(
+                                readOnly: true,
+                                controller: shotsController,
+                                validator: (value) {
+                                  if (value == null) {
+                                    return AppLocalizations.of(context)!
+                                        .selectShot;
+                                  }
+                                  return null;
+                                },
+                                decoration: InputDecoration(
+                                  hintText:
+                                      AppLocalizations.of(context)!.selectShot,
+                                  border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(20.r)),
+                                  suffixIcon: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0),
+                                    child: DropdownButton<String>(
+                                      underline: const SizedBox(),
+                                      style:
+                                          const TextStyle(color: Colors.black),
+                                      value: AppLocalizations.of(context)!
+                                          .selectShot,
+                                      // Replace null with the selected shot
+                                      onChanged: (String? newValue) {
+                                        // selectedGame!['shots'].remove(newValue);
+                                        shotsController.text = newValue!;
+
+                                        if (kDebugMode) {
+                                          print(newValue);
+                                        }
+                                      },
+                                      items: Utils.shotsListToTitle[
+                                              shotTitleController.text == ''
+                                                  ? 'test'
+                                                  : shotTitleController.text]
+                                          .map<DropdownMenuItem<String>>(
+                                              (String shot) {
+                                        return DropdownMenuItem<String>(
+                                          value: shot,
+                                          child: Text(shot),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : SizedBox(
+                                height: 0.sp,
+                              ),
+                        CustomSizedBox.height(12.sp),
+                        TitleText(
+                            text: AppLocalizations.of(context)!.shotDuration),
+                        //CustomSizedBox.height(5),
+                        CustomTextField(
+                          controller: shotDurationController,
+                          hintText: AppLocalizations.of(context)!.durationMin,
+                          textInputType: TextInputType.number,
+                          validateText:
+                              AppLocalizations.of(context)!.selectDuration,
+                        ),
+                        CustomSizedBox.height(20),
+                        CustomButton(
+                          onTap: () {
+                            // print(selectedGame!['title']);
+                            if (shotTitleController.text.isEmpty ||
+                                shotDurationController.text.isEmpty) {
+                              CustomDialog.errorDialog(context,
+                                  title: AppLocalizations.of(context)!
+                                      .titleDurationError,
+                                  message: AppLocalizations.of(context)!
+                                      .fieldCanNotBeEmpty);
+                            } else if (double.parse(
+                                    shotDurationController.text) >
+                                totalDuration) {
+                              CustomDialog.errorDialog(context,
+                                  title: AppLocalizations.of(context)!
+                                      .durationError,
+                                  message:
+                                      "${AppLocalizations.of(context)!.durationCanNotBeGreaterThanOverAll}$totalDuration");
+                            } else {
+                              ///COPYTHISTOCOACHSIDE CHANGESS
+                              // print("object2");
+                              // print(widget.selectedGame);
+                              // print("gamess" + game["title"]);
+                              Map<String, dynamic> newValue = {
+                                'game_situation':
+                                    game[AppLocalizations.of(context)!.title],
+                                AppLocalizations.of(context)!.shots: [
+                                  {
+                                    'shot_title': shotTitleController.text,
+                                    'duration': shotDurationController.text,
+                                    'shot': shotsController.text,
+                                    'game_situation': game[
+                                        AppLocalizations.of(context)!.title],
+                                  }
+                                ]
+                              };
+                              // List<Map<String, dynamic>> value1=[];
+                              // value1.add(newValue);
+                              // shots1.insert(index,newValue);
+                              // List<Map<String, dynamic>> shots1=[];
+
+                              // var shots1=[];
+
+                              List<Map<String, dynamic>> shots2 = [];
+                              // if (shotsTest[index] != null) {
+                              //   shots2 = shotsTest[index]!;
+                              //   // print("testt");
+                              //   // print(shotsTest[index]!);
+                              // }
+
+                              print("ssss");
+                              print(newValue);
+
+                              // double totalDuration =
+                              //     double.parse(durationController.text) -
+                              //         double.parse(shotDurationController.text);
+
+                              //log("full map $shotsTest");
+                              //  print("total duration->>> ${totalDuration}");
+                              //print("full map $shotsTest");
+                              if (shotsTest.containsKey(index)) {
+                                List<Map<String, dynamic>>? valll =
+                                    shotsTest[index];
+
+                                valll?.add(newValue);
+
+                                shotsTest.addAll({index: valll!});
+                              } else {
+                                shotsTest.addAll({
+                                  index: [newValue]
+                                });
+                              }
+                              context
+                                  .read<TrainingRawOutputCubit>()
+                                  .updateRaw(shotsTest);
+                              setState(() {});
+                              Navigator.of(context).pop(true);
+                              shotDurationController.clear();
+                              shotTitleController.clear();
+                            }
+                          },
+                          text: AppLocalizations.of(context)!.add,
+                        ),
+                      ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class IndividualListTrainingWidget extends StatefulWidget {
+  final List shotsIndividual;
+  final int index2;
+  final Map<int, List<Map<String, dynamic>>> shotTest;
+
+  const IndividualListTrainingWidget(
+      {Key? key,
+      required this.shotsIndividual,
+      required this.index2,
+      required this.shotTest})
+      : super(key: key);
+
+  @override
+  State<IndividualListTrainingWidget> createState() =>
+      _IndividualListTrainingWidgetState();
+}
+
+class _IndividualListTrainingWidgetState
+    extends State<IndividualListTrainingWidget> {
+  @override
+  Widget build(BuildContext context) {
+    // print("lenth");
+    // print(widget.shotTest[widget.index2]!.length);
+    // print( widget.shotTest[widget.index2]!.isEmpty);
+    return SizedBox(
+      height: widget.shotTest[widget.index2]!.isEmpty ||
+              widget.shotTest[widget.index2] == null
+          ? 0
+          : 50.sp,
+      child: ListView.separated(
+          physics: const BouncingScrollPhysics(),
+          shrinkWrap: true,
+          scrollDirection: Axis.horizontal,
+          itemBuilder: (context, index) {
+            //  print(widget.shotTest[widget.index2]![index]["shots"][0]['shot_title']);
+            // Map<String, dynamic> shot =
+            // shotsFromGameSituation[index];
+
+            return Container(
+              width: widget.shotTest[widget.index2]!.isEmpty ||
+                      widget.shotTest[widget.index2] == null
+                  ? 0
+                  : 200.w,
+              height: widget.shotTest[widget.index2]!.isEmpty ||
+                      widget.shotTest[widget.index2] == null
+                  ? 0
+                  : 24.h,
+              margin: const EdgeInsets.only(right: 10).r,
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor,
+                borderRadius: BorderRadius.circular(8).r,
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: AppText(
+                      //list[index],
+                      '${widget.shotTest[widget.index2]![index][AppLocalizations.of(context)!.shots][0]['shot_title']}->${widget.shotTest[widget.index2]![index][AppLocalizations.of(context)!.shots][0]['shot']}: ${widget.shotTest[widget.index2]![index][AppLocalizations.of(context)!.shots][0]['duration']} m',
+                      style: Styles.latoSemiBold(
+                        context,
+                        color: AppColors.whiteColor,
+                        fontSize: 14.sp,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: GestureDetector(
+                      onTap: () {
+                        print("object");
+                        setState(
+                          () {
+                            widget.shotTest[widget.index2]!.removeAt(index);
+                            context
+                                .read<TrainingRawOutputCubit>()
+                                .updateRaw(widget.shotTest);
+                            // context.read<UpdateGameSituationTrainingCubit>().update(true);
+
+                            //    widget.shotsIndividual[widget.index2]["shots"].removeAt(index);
+                            //    print(widget.shotsIndividual[widget.index2]["shots"].length);
+
+                            // shot.remove('duration');
+                          },
+                        );
+                        //widget.list(list);
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 15.w,
+                        height: 15.w,
+                        decoration: const BoxDecoration(
+                          color: AppColors.blackColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: AppColors.whiteColor,
+                            size: 10.r,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          separatorBuilder: (context, index) {
+            return const SizedBox(width: 10);
+          },
+          itemCount: widget.shotTest[widget.index2]!.length),
+    );
+  }
+}

@@ -1,0 +1,4 @@
+- Functionality Directory Name
+  - Cubit
+  - Components
+  - functionality Files (Screens etc)
